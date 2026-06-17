@@ -15,6 +15,7 @@
 تُرجع رمز خروج 0 عند النجاح، و1 عند وجود أي مخالفة.
 """
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -50,6 +51,18 @@ REQUIRED_SECTION_KEYWORDS = [
 IGNORED_FILES = {"README.md"}
 
 
+def is_merge_context() -> bool:
+    """
+    هل نحن في سياق «دمج» (push إلى main)؟ في تدفّق رست، يبقى المقترح باسم
+    0000- طوال فترة الـ Pull Request، ولا يُرقَّم إلا عند الدمج. لذا نفرض فحص
+    الترقيم فقط عند الدفع إلى main (سياق الدمج)، ونكتفي بتحذير في الـ PR.
+    """
+    return (
+        os.environ.get("GITHUB_EVENT_NAME") == "push"
+        and os.environ.get("GITHUB_REF") == "refs/heads/main"
+    )
+
+
 def collect_headings(text: str) -> str:
     """يجمع كل أسطر العناوين (التي تبدأ بـ #) في نصّ واحد للبحث فيه."""
     return "\n".join(
@@ -63,15 +76,19 @@ def lint_file(path: Path) -> list[str]:
     name = path.name
 
     # 1) فحص اسم الملف
-    if not NAME_PATTERN.match(name):
+    #    أثناء الـ PR يُسمح بـ 0000- (لم يُرقَّم بعد)؛ غيرها يجب أن يطابق النمط.
+    if name.startswith("0000-"):
+        if is_merge_context():
+            # عند الدمج إلى main: المقترح يجب أن يُرقَّم برقم الـ PR.
+            problems.append(
+                f"المقترح ما زال غير مرقّم (0000) — أعطِه رقماً قبل الدمج: {name}"
+            )
+        else:
+            # في الـ PR: تذكير لا يُفشِل الفحص.
+            print(f"   ℹ️  {name}: مقترح غير مرقّم (سيُرقَّم عند الدمج) — مقبول في الـ PR.")
+    elif not NAME_PATTERN.match(name):
         problems.append(
             f"اسم الملف لا يطابق النمط 'NNNN-اسم-وصفي.md': {name}"
-        )
-
-    # 2) المقترح غير المرقّم (0000) لا يُدمَج
-    if name.startswith("0000-"):
-        problems.append(
-            f"المقترح ما زال غير مرقّم (0000) — أعطِه رقماً قبل الدمج: {name}"
         )
 
     # 3) فحص الأقسام الإلزامية
