@@ -1,0 +1,47 @@
+name: 📌 تتبُّع تنفيذ مقترح معتمَد
+description: يُفتح بعد قبول RFC لمتابعة حالة تنفيذه في اللغة.
+title: "[تتبُّع] تنفيذ RFC-NNNN: <العنوان>"
+labels: ["تتبُّع-تنفيذ"]
+body:
+  - type: input
+    id: rfc
+    attributes:
+      label: المقترح (RFC)
+      description: رقم المقترح ورابط ملفه في text/
+      placeholder: "RFC-0001 — text/0001-أنواع-تدريجية.md"
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: ملخّص الميزة
+      description: وصف موجز لما تمّ اعتماده.
+    validations:
+      required: true
+  - type: checkboxes
+    id: systems
+    attributes:
+      label: الأنظمة المتأثّرة (تحليل الأثر)
+      description: حدّد الأنظمة الداخلية التي يلمسها التنفيذ.
+      options:
+        - label: مصدر الحقيقة (language-truth/ + إعادة التوليد)
+        - label: المحلل المعجمي/النحوي (Lexer/Parser)
+        - label: الشجرة المجردة (AST)
+        - label: المفسّر (interpreter)
+        - label: المترجم (sadc — SIR/LLVM)
+        - label: نظام الأخطاء (language-truth/errors/)
+        - label: الأدوات (LSP، المنسّق، sadinfo، الحزم)
+        - label: التوثيق + الاختبارات
+  - type: textarea
+    id: steps
+    attributes:
+      label: خطوات التنفيذ
+      description: قائمة مهام قابلة للتتبّع (يمكن استخدام صناديق اختيار).
+      placeholder: |
+        - [ ] خطوة 1
+        - [ ] خطوة 2
+  - type: textarea
+    id: notes
+    attributes:
+      label: ملاحظات
+      description: قرارات تصميمية أو أسئلة ظهرت أثناء التنفيذ.

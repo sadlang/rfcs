@@ -1,0 +1,30 @@
+# إجراء CI: التحقّق من صياغة مقترحات لغة ص عند كل Pull Request يَمَسّ المقترحات
+name: التحقّق من المقترحات
+
+on:
+  push:
+    paths:
+      - "text/**"
+      - ".github/scripts/lint_rfcs.py"
+      - ".github/workflows/lint.yml"
+  pull_request:
+    paths:
+      - "text/**"
+      - ".github/scripts/lint_rfcs.py"
+      - ".github/workflows/lint.yml"
+
+jobs:
+  lint:
+    name: فحص بنية المقترحات
+    runs-on: ubuntu-latest
+    steps:
+      - name: جلب الكود
+        uses: actions/checkout@v4
+
+      - name: تهيئة Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: تشغيل أداة التحقّق
+        run: python .github/scripts/lint_rfcs.py

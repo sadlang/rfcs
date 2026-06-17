@@ -1,0 +1,9 @@
+# إعداد قوالب Issues لمستودع مقترحات لغة ص
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 نقاش فكرة (Discussions)
+    url: https://github.com/sadlang/rfcs/discussions
+    about: لطرح فكرة أو سؤال قبل كتابة مقترح RFC رسمي — ابدأ من هنا.
+  - name: 🐞 إبلاغ عن خطأ في اللغة
+    url: https://github.com/sadlang
+    about: إصلاحات الأخطاء والمشكلات التقنية تُرفع في المستودع المعني، لا هنا.
