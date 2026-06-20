@@ -3,14 +3,21 @@
 """
 أداة التحقّق من صياغة مقترحات لغة ص (RFC linter).
 
-تفحص كل ملفات المقترحات في مجلد text/ وتتأكّد من:
+تفحص كل ملفات المقترحات في المجلدات المعتمَدة وتتأكّد من:
   1. مطابقة اسم الملف للنمط: NNNN-اسم-وصفي.md (أربعة أرقام ثم شرطة ثم اسم).
-  2. وجود الأقسام الإلزامية التسعة (تُطابَق بكلمات مفتاحية عربية تسامحاً مع
+  2. وجود حقل «الحالة» الإلزامي في الرأس بقيمة معتمَدة
+     (مقترَح/مقبول/قيد التنفيذ/مكتمل/مرفوض/مؤجَّل).
+  3. وجود الأقسام الإلزامية التسعة (تُطابَق بكلمات مفتاحية عربية تسامحاً مع
      اختلاف صياغة العنوان).
-  3. عدم بقاء ملف باسم 0000-* (المقترح غير المرقّم لا يُدمَج).
+  4. عدم بقاء ملف باسم 0000-* (المقترح غير المرقّم لا يُدمَج).
 
-تُستثنى من الفحص: text/README.md (ملف توضيحي لا مقترح).
-القالب 0000-template.md يعيش في الجذر (خارج text/) فلا يُفحَص هنا.
+المجلدات المفحوصة (طبقة RFC موحّدة لكل المنظومة):
+  - text/        : مقترحات اللغة (مسطّحة).
+  - tools/**      : مقترحات الأدوات (مجلّد فرعيّ لكل أداة، تُفحَص تعاوديًّا).
+  - extensions/** : مقترحات إضافات VS Code (مجلّد فرعيّ لكل إضافة، تعاوديًّا).
+
+تُستثنى من الفحص: أي README.md (ملف توضيحي لا مقترح).
+القالب 0000-template.md يعيش في الجذر فلا يُفحَص هنا.
 
 تُرجع رمز خروج 0 عند النجاح، و1 عند وجود أي مخالفة.
 """
@@ -28,8 +35,17 @@ for _stream in (sys.stdout, sys.stderr):
     except (AttributeError, ValueError):
         pass
 
-# مجلد المقترحات المعتمَدة (نسبةً لجذر المستودع)
-TEXT_DIR = Path(__file__).resolve().parents[2] / "text"
+# جذر المستودع، ومجلدات المقترحات المعتمَدة نسبةً إليه.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+# المجلدات المفحوصة: (المسار، هل يُفحَص تعاوديًّا؟)
+#   - text/ مسطّح (مقترحات اللغة مباشرةً).
+#   - tools/ و extensions/ تعاوديّان (مجلّد فرعيّ لكل أداة/إضافة).
+RFC_DIRS = [
+    (REPO_ROOT / "text", False),
+    (REPO_ROOT / "tools", True),
+    (REPO_ROOT / "extensions", True),
+]
 
 # نمط اسم الملف الصحيح: أربعة أرقام + شرطة + اسم + .md
 NAME_PATTERN = re.compile(r"^\d{4}-.+\.md$")
@@ -45,6 +61,20 @@ REQUIRED_SECTION_KEYWORDS = [
     "أعمال سابقة",
     "غير محسومة",
     "مستقبلية",
+]
+
+# حقل الحالة إلزامي في رأس كل مقترح، بقيمة من القيم المعتمَدة فقط.
+# نطابق تساهلاً مع/دون التشكيل (مقترَح/مقترح، مؤجَّل/مؤجل).
+STATUS_FIELD_KEYWORD = "الحالة"
+VALID_STATUSES = [
+    "مقترَح",
+    "مقترح",
+    "مقبول",
+    "قيد التنفيذ",
+    "مكتمل",
+    "مرفوض",
+    "مؤجَّل",
+    "مؤجل",
 ]
 
 # ملفات لا تُعدّ مقترحات
@@ -91,8 +121,30 @@ def lint_file(path: Path) -> list[str]:
             f"اسم الملف لا يطابق النمط 'NNNN-اسم-وصفي.md': {name}"
         )
 
+    content = path.read_text(encoding="utf-8")
+
+    # 2) فحص حقل «الحالة» الإلزامي في الرأس (يجب وجوده بقيمة معتمَدة)
+    status_line = next(
+        (
+            line
+            for line in content.splitlines()
+            if STATUS_FIELD_KEYWORD in line and line.lstrip().startswith("-")
+        ),
+        None,
+    )
+    if status_line is None:
+        problems.append(
+            f"حقل إلزامي مفقود في الرأس: '{STATUS_FIELD_KEYWORD}' "
+            f"(القيم المعتمَدة: {' | '.join(VALID_STATUSES)})"
+        )
+    elif not any(status in status_line for status in VALID_STATUSES):
+        problems.append(
+            f"قيمة حقل '{STATUS_FIELD_KEYWORD}' غير معتمَدة — "
+            f"استخدم إحدى: {' | '.join(VALID_STATUSES)}"
+        )
+
     # 3) فحص الأقسام الإلزامية
-    headings = collect_headings(path.read_text(encoding="utf-8"))
+    headings = collect_headings(content)
     for keyword in REQUIRED_SECTION_KEYWORDS:
         if keyword not in headings:
             problems.append(f"قسم إلزامي مفقود (كلمة مفتاحية: '{keyword}')")
@@ -100,16 +152,25 @@ def lint_file(path: Path) -> list[str]:
     return problems
 
 
+def collect_candidates() -> list[Path]:
+    """يجمع كل ملفات المقترحات من المجلدات المعتمَدة (مع تجاهل README وغير الموجود)."""
+    candidates: list[Path] = []
+    for directory, recursive in RFC_DIRS:
+        if not directory.is_dir():
+            continue  # مجلد اختياري قد لا يكون أُنشئ بعد (لا أدوات/إضافات حتى الآن).
+        pattern = "**/*.md" if recursive else "*.md"
+        candidates.extend(
+            p for p in directory.glob(pattern) if p.name not in IGNORED_FILES
+        )
+    return sorted(candidates)
+
+
 def main() -> int:
-    if not TEXT_DIR.is_dir():
-        print(f"::error::مجلد المقترحات غير موجود: {TEXT_DIR}")
+    if not any(directory.is_dir() for directory, _ in RFC_DIRS):
+        print(f"::error::لا يوجد أي مجلد مقترحات: {[str(d) for d, _ in RFC_DIRS]}")
         return 1
 
-    candidates = [
-        p
-        for p in sorted(TEXT_DIR.glob("*.md"))
-        if p.name not in IGNORED_FILES
-    ]
+    candidates = collect_candidates()
 
     if not candidates:
         print("لا توجد مقترحات لفحصها بعد — لا شيء للتحقّق منه. ✅")
@@ -117,16 +178,17 @@ def main() -> int:
 
     total_problems = 0
     for path in candidates:
+        rel = path.relative_to(REPO_ROOT).as_posix()
         problems = lint_file(path)
         if problems:
             total_problems += len(problems)
-            print(f"\n❌ {path.name}:")
+            print(f"\n❌ {rel}:")
             for p in problems:
                 # تنسيق GitHub Actions لإظهار الخطأ على الملف
-                print(f"::error file=text/{path.name}::{p}")
+                print(f"::error file={rel}::{p}")
                 print(f"   - {p}")
         else:
-            print(f"✅ {path.name}")
+            print(f"✅ {rel}")
 
     if total_problems:
         print(f"\nالنتيجة: {total_problems} مخالفة في المقترحات.")
